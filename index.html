@@ -1,0 +1,223 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Shung-Hsi Yu" />
+  <meta name="author" content="Yunlai You" />
+  <title>A Case of Wireless Hacking</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="css/github-pandoc.css" type="text/css" />
+  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  
+</head>
+<body>
+<div id="header">
+<h1 class="title">A Case of Wireless Hacking</h1>
+<h1 class="subtitle">Mass Deauthenication Attack</h1>
+<h2 class="author">Shung-Hsi Yu</h2>
+<h2 class="author">Yunlai You</h2>
+</div>
+<h1 id="introduction"><span class="header-section-number">1</span> Introduction</h1>
+<p>In this paper we present a case of wireless hacking which is a form of Denial of Service (DoS) Attack on Wi-Fi, or Wi-Fi Jamming, called Mass Deauthentication Attack (Mass Deauth), which is based on Deauthentication Attack <span class="citation">[1]</span>. Different from some Wi-Fi Jamming which flood the physical frequency with noise, which operates at level 1 of the OSI model, Mass Deauth operates at level 2. Operating on level 2 gives the advantage of the ability to specifying attack target, but comes with the disadvantage of replying on the design flow of existing protocol, which may be corrected in the future.</p>
+<h1 id="system"><span class="header-section-number">2</span> System</h1>
+<p>The system consists of three parties, the Access Point (AP), the client and the attacker. AP provides network access to client through Wi-Fi. AP is identified by Basic Service Set Identification (BSSID), which is the Media Access Control (MAC) address of the Network Interface Controller (NIC) attached to the AP. Client, also identified by the MAC address of the attached NIC, is a device (e.g. laptop, smart-phone) that needs network connection through Wi-Fi. attacker is the party that launches the Mass Deauth Attack. The Mass Deauth Attack launched by the attacker is considered to be successful if multiple AP-client pair are disconnected.</p>
+<h1 id="mass-deauthentication-attack"><span class="header-section-number">3</span> Mass Deauthentication Attack</h1>
+<p>Similar to a Deauth Attack <span class="citation">[1]</span>, Mass Deauth Attack requires certain information about the attack target -- the BSSID of AP, the MAC of client and the Wi-Fi channel used for communication, all of which can be obtained through sniffing.</p>
+<h2 id="sniffing"><span class="header-section-number">3.1</span> Sniffing</h2>
+<p>In order for the attacker to obtain information required for the attack, it needs to control a NIC that supports Promiscuous Mode and is in close proximity of the attack target.</p>
+<p>The attacker will capture two kinds of 802.11 Frames, (1) Beacon Frames sent by the AP and (2) Data Frames sent between client and AP and discards all other frames. The attacker may filter out frames coming from AP or client that it does not wish to attack at this stage. Frames sent to a broadcast or muticast MAC address should also be filtered out, as the MAC address does not identify a AP or client. All the captured frames are then processed to extract the needed information.</p>
+<h2 id="information-extraction"><span class="header-section-number">3.2</span> Information Extraction</h2>
+<p>The 802.11 header of the captured frames contains the MAC information that is needed, but the information extraction process is not straight forward. The structure of the 802.11 header can be seen in the figure below retrieved from the WildPackets website <span class="citation">[3]</span>.</p>
+<div class="figure">
+<img src="media/header.png" alt="802.11 Header [3]" />
+<p class="caption">802.11 Header <span class="citation">[3]</span></p>
+</div>
+<h3 id="beacon-frames"><span class="header-section-number">3.2.1</span> Beacon Frames</h3>
+<p>For beacon frames, both field <code>Address 2</code> and <code>Address 3</code> contain the BSSID of the AP sending the beacon, shown in the table below.</p>
+<table>
+<colgroup>
+<col width="23%" />
+<col width="19%" />
+<col width="19%" />
+<col width="15%" />
+<col width="15%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Type</th>
+<th align="left">Subtype</th>
+<th align="left">Address 1</th>
+<th align="left">Address 2</th>
+<th align="left">Address 3</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">00 (Mgnt Frames)</td>
+<td align="left">1000 (Beacon)</td>
+<td align="left">Broadcast MAC</td>
+<td align="left">AP BSSID</td>
+<td align="left">AP BSSID</td>
+</tr>
+</tbody>
+</table>
+<p>The channel information, however, is not in the 802.11 header, it is in the encapsulated in the <code>Network Data</code> field of 802.11 beacon frame as an Information Element. In the beacon frames, the channel information is encapsulated in two IE, that is the IE that contain the channel information is encapsulated inside an IE, which is then encapsulated by another IE (this contain the ESSID of AP), which is then encapsulated by 802.11 frame.</p>
+<h3 id="data-frames"><span class="header-section-number">3.2.2</span> Data Frames</h3>
+<p>For data frames the situation is more complicated, two more fields, <code>to DS</code> and <code>from DS</code> must be taken into account to identify the AP BSSID and client MAC.</p>
+<p>Frames with <code>To DS</code> set to <code>0</code> and <code>From DS</code> set to <code>0</code> contains the MAC of two different client in field <code>Address 1</code> and <code>Address 2</code> respectively, the BSSID of AP in <code>Address 3</code>. Frames with <code>To DS</code> set to <code>0</code> and <code>From DS</code> set to <code>1</code> contains the MAC of a client in field <code>Address 3</code> and BSSID of the associated AP in <code>Address 2</code>. Frames with <code>To DS</code> set to <code>1</code> and <code>From DS</code> set to <code>0</code> contains the MAC of a client in field <code>Address 3</code> and BSSID of the associated AP in <code>Address 2</code>. Frames with <code>To DS</code> set to <code>1</code> and <code>From DS</code> set to <code>1</code> are not taken into consideration. All of which can be seen in the table below, the information is retrieved from the WildPackets website <span class="citation">[3]</span>.</p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="11%" />
+<col width="8%" />
+<col width="11%" />
+<col width="17%" />
+<col width="17%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Type</th>
+<th align="left">Subtype</th>
+<th align="left">To DS</th>
+<th align="left">From DS</th>
+<th align="left">Address 1</th>
+<th align="left">Address 2</th>
+<th align="left">Address 3</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">10 (Data Frames)</td>
+<td align="left">ANY</td>
+<td align="left">0</td>
+<td align="left">0</td>
+<td align="left">Client 1 MAC</td>
+<td align="left">Client 2 MAC</td>
+<td align="left">AP BSSID</td>
+</tr>
+<tr class="even">
+<td align="left">10</td>
+<td align="left">ANY</td>
+<td align="left">0</td>
+<td align="left">1</td>
+<td align="left">...</td>
+<td align="left">AP BSSID</td>
+<td align="left">Client MAC</td>
+</tr>
+<tr class="odd">
+<td align="left">10</td>
+<td align="left">ANY</td>
+<td align="left">1</td>
+<td align="left">0</td>
+<td align="left">AP BSSID</td>
+<td align="left">...</td>
+<td align="left">Client MAC</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deauthentication-attack"><span class="header-section-number">3.3</span> Deauthentication Attack</h2>
+<p>For each client-AP pair, the attacker sends two kinds of deauthentication frames. One targeted at the client while masquerading as the AP associated with client, and another target at the AP while masquerading as the client. The 802.11 header of the two kinds of deauthentication frames can be seen in the table below.</p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="17%" />
+<col width="17%" />
+<col width="14%" />
+<col width="14%" />
+<col width="14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Type</th>
+<th align="left">Subtype</th>
+<th align="left">Address 1</th>
+<th align="left">Address 2</th>
+<th align="left">Address 3</th>
+<th align="left">Comment</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">00 (Mgnt Frames)</td>
+<td align="left">1100 (Deauth)</td>
+<td align="left">Client MAC</td>
+<td align="left">AP BSSID</td>
+<td align="left">AP BSSID</td>
+<td align="left">To AP</td>
+</tr>
+<tr class="even">
+<td align="left">00 (Mgnt Frames)</td>
+<td align="left">1100 (Deauth)</td>
+<td align="left">AP BSSID</td>
+<td align="left">Client MAC</td>
+<td align="left">AP BSSID</td>
+<td align="left">To client</td>
+</tr>
+</tbody>
+</table>
+<h1 id="implementation"><span class="header-section-number">4</span> Implementation</h1>
+<p>Our implementation can be found on <a href="https://github.com/shunghsiyu/mass-deauth-attack">our GitHub repository</a> <span class="citation">[4]</span>. It uses Python 2.7, Airocrack-ng <span class="citation">[5]</span>, libffi <span class="citation">[6]</span> and three python modules, Scapy <span class="citation">[7]</span>, CFFI <span class="citation">[8]</span>, Gevent <span class="citation">[9]</span>. Airocrack-ng puts the NIC into monitor mode. libffi and CFFI together allow our program to call the call the C interface directly. Gevent enable us to use coroutine rather creating threads, which reduces the requirement on system resources. Airocrack-ng, libffi, CFFI and Gevent are dependencies that are not critical to the operation of the program, and maybe replaced with tool that are more common</p>
+<p>While there are already multiple implementation of Mass Deauth programs available <span class="citation">[10,11]</span>, our program has the following advantages: (1) it calls the C code that switches the channel that the NIC operates on, rather than spawning another process, which may be 100 times faster when we compare the two on our test machine; (2) it specify an client MAC rather than using broadcast MAC address deauthentication frame. Some client devices are known to discard broadcast deauthentication frames <span class="citation">[12]</span>; (3) unlike some implementation that only do Deauthentication Attack on clients connected to a single AP, our implementation attack <em>all</em> the AP and client in close proximity.</p>
+<h2 id="states"><span class="header-section-number">4.1</span> States</h2>
+<p>Our program has four states (1) AP Discovery, sniff beacon frames sent from AP in close proximity, create a list of discovered AP <span class="math">\(A\)</span> and associate each AP with the channel <span class="math">\(n\)</span> it operates on. (2) Channel Switching, select a channel that has at least on AP operating on, switch NIC to the same channel <span class="math">\(n\)</span>. (3) Client Discovery, sniff data frames sent on the channel <span class="math">\(n\)</span>, create a list of client <span class="math">\(C\)</span> for each AP on that channel. (3) Mass Deauth Attack, for each AP in the AP list <span class="math">\(A\)</span>, switch to the channel it operates on, and send Deauthentication Frames to the client and AP for each client in <span class="math">\(C\)</span> that is associated with the AP. The program then goes back to state (2) but will choose a different channel. As seen in the figure  below.</p>
+<div class="figure">
+<img src="media/states.png" alt="Program States" />
+<p class="caption">Program States</p>
+</div>
+<h2 id="environment"><span class="header-section-number">4.2</span> Environment</h2>
+<p>In our test environment we use Rosewill RNX-N150HG connected through USB with Linux Mint 17 Qiana. The AP is a Actiontec MI424WR Rev. I router, and for the client we use two iPhone 5C.</p>
+<h2 id="execution"><span class="header-section-number">4.3</span> Execution</h2>
+<p>Here we provide several screen shots during the execution of our program.</p>
+<div class="figure">
+<img src="media/execution1.jpg" alt="Sniffing Date Frames on Different Channels" />
+<p class="caption">Sniffing Date Frames on Different Channels</p>
+</div>
+<div class="figure">
+<img src="media/execution2.jpg" alt="Sending Deauth Frames to Client 1" />
+<p class="caption">Sending Deauth Frames to Client 1</p>
+</div>
+<div class="figure">
+<img src="media/execution3.jpg" alt="Sniff Data Frames on Channel 11" />
+<p class="caption">Sniff Data Frames on Channel 11</p>
+</div>
+<div class="figure">
+<img src="media/execution5.jpg" alt="Sending Deauth Frames to Client 1 &amp; 2" />
+<p class="caption">Sending Deauth Frames to Client 1 &amp; 2</p>
+</div>
+<div class="figure">
+<img src="media/execution5.jpg" alt="Sending Loop between State 2 to 4" />
+<p class="caption">Sending Loop between State 2 to 4</p>
+</div>
+<p></p>
+<h1 id="mitigation"><span class="header-section-number">5</span> Mitigation</h1>
+<p>There are two methods to mitigate a Mass Deauth Attack, both prevents the dissociation frames sent by the attacker from taking effect, similar to the mitigation of a Deauthentication Attack.</p>
+<p>Using a Faraday Cage mitigates the attack at the physical level, or level 1 in the OSI model. Faraday Cage can isolate the network from the attacker, preventing any frame sent by the attacker from reaching the Wi-Fi network. This method, however, has several draw back that makes it impractical. First, the AP and all the clients must be inside the Faraday Cage, which may be restricted in size. Second, other measures must be taken to prevent the attacking from entering the Wi-Fi network (e.g. preventing the attacker hacking and taking control of a laptop inside the cage). If the attacker manage to enter the Faraday Cage this method cannot mitigate the Mass Deauth Attack.</p>
+<p>Adopting the IEEE 802.11w is a more feasible approach to prevent Mass Deauth Attack. The 802.11w standard defines a set of frames, which includes the dissociation frame, that must be sent along with a Message Integrity Code (MIC) computed with a shared-secret unknown to the attacker. Since the attack does not know the shared-secret, the dissociation frames it sends will be discarded by both the client and AP as the MIC will be incorrect. This methods still has drawbacks. First, a Deauthentication Attack is still possible, however the Wi-Fi network becomes less vulnerable as the size of the client pool increases <span class="citation">[2]</span>. Second, while several enterprise router (e.g. Cisco, supports the standard (depending on the manufacturer it may be called Protected Management Frames <span class="citation">[13]</span> or Management Frame Protection <span class="citation">[14]</span>), the standard is not widely adopted in non-enterprise environment. For a home-user or small business, the only option is to use a router that can be flashed OpenWrt <span class="citation">[15]</span> with a NIC thats can be used with the <em>ath9k</em> driver, combined with a device that is installed with Microsoft Windows 8 or newer.</p>
+<h1 id="conclusion"><span class="header-section-number">6</span> Conclusion</h1>
+<p>In this paper we proposed an attack on Wi-Fi network called Mass Deauthentication Attack that can cause a Denial of Service among clients that needs a network connection through Wi-Fi in close proximity of the attacker. Mass Deauth need the MAC of client and the BSSID of the associated AP and their channel of communication in order to launch the attack, all of the information may be extracted from sniffed 802.11 frames.</p>
+<p>We also provided an implementation of Mass Deauth attack that can run on Linux, Python 2.7 (with Scapy, CFFI, Gevent), libffi and Airocrack-ng. To mitigate a Mass Deauth Attack we provided two methods, either using Faraday Cage or adopting the 802.11w standard. Adopting the 802.11w standard requires either switching to an enterprise router, or using OpenWrt based router.</p>
+<p>Overall, Mass Deauthentication Attack exploits the design flaws within the IEEE 802.11 standard, more specifically, it depends on the fact that management frames, which are essential for Wi-Fi, are not authenticated, thus may be spoofed. Since Mass Deauth exploits the design flaw at the software layer, we expect attacks based on Deauthentication Attack to become obsolete when IEEE 802.11w standard becomes widely adopted.</p>
+<p></p>
+<div class="references">
+<h1 id="reference" class="unnumbered">Reference</h1>
+<p>1. Bellardo, J. and Savage, S. 802.11 Denial-of-Service Attacks: Real Vulnerabilities and Practical Solutions. <em>USENIX security</em>, (2003), 15–28.</p>
+<p>2. Bertka, B. <em>802.11w Security: DoS Attacks and Vulnerability Controls</em>. Institute for Computing, Information; Cognitive Systems.</p>
+<p>3. 802.11 WLAN Packets and Protocols. WildPackets: Network Analyzer, VoIP Monitoring, Protocol Analysis. <a href="http://www.wildpackets.com/resources/compendium/wireless_lan/wlan_packets" class="uri">http://www.wildpackets.com/resources/compendium/wireless_lan/wlan_packets</a>.</p>
+<p>4. shunghsiyu/mass-deauth-attack. <a href="https://raw.githubusercontent.com/shunghsiyu/mass-deauth-attack/master/mass_deauth.py" class="uri">https://raw.githubusercontent.com/shunghsiyu/mass-deauth-attack/master/mass_deauth.py</a>.</p>
+<p>5. Aircrack-ng. <a href="http://www.aircrack-ng.org" class="uri">http://www.aircrack-ng.org</a>.</p>
+<p>6. libffi. <a href="https://sourceware.org/libffi/" class="uri">https://sourceware.org/libffi/</a>.</p>
+<p>7. Scapy. <a href="http://www.secdev.org/projects/scapy/doc/index.html" class="uri">http://www.secdev.org/projects/scapy/doc/index.html</a>.</p>
+<p>8. CFFI. <a href="https://cffi.readthedocs.org/en/latest/" class="uri">https://cffi.readthedocs.org/en/latest/</a>.</p>
+<p>9. gevent. <a href="http://www.gevent.org" class="uri">http://www.gevent.org</a>.</p>
+<p>10. RFKiller/mass-deauth. <a href="https://github.com/RFKiller/mass-deauth" class="uri">https://github.com/RFKiller/mass-deauth</a>.</p>
+<p>11. Leg3nd’s Elegant Mass DeAuth Script. <a href="http://jasagerpwn.googlecode.com/svn/trunk/src/deauth.sh" class="uri">http://jasagerpwn.googlecode.com/svn/trunk/src/deauth.sh</a>.</p>
+<p>12. Deauthentication. [Aircrack-ng]. <a href="http://www.aircrack-ng.org/doku.php?id=deauthentication" class="uri">http://www.aircrack-ng.org/doku.php?id=deauthentication</a>.</p>
+<p>13. What are Protected Management Frames. Wi-Fi alliance. <a href="https://www.wi-fi.org/knowledge-center/faq/what-are-protected-management-frames" class="uri">https://www.wi-fi.org/knowledge-center/faq/what-are-protected-management-frames</a>.</p>
+<p>14. Infrastructure Management Frame Protection (MFP) with WLC and LAP Configuration Example. Cisco Systems, Inc. <a href="http://www.cisco.com/c/en/us/support/docs/wireless-mobility/wlan-security/82196-mfp.html" class="uri">http://www.cisco.com/c/en/us/support/docs/wireless-mobility/wlan-security/82196-mfp.html</a>.</p>
+<p>15. OpenWrt. <a href="https://openwrt.org/" class="uri">https://openwrt.org/</a>.</p>
+</div>
+</body>
+</html>
